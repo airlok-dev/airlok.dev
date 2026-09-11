@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>airlok</title>
+<meta name="description" content="A terminal coding agent that replaces the secrets in every request with placeholders before the request leaves your machine.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+<h1>airlok</h1>
+<p>airlok is a coding agent for the terminal. It reads, searches, edits, and runs code in your repository with a model from Anthropic or OpenAI (Azure OpenAI included), and it replaces the secrets in every request with placeholders before the request leaves your machine.</p>
+
+<h2>The privacy airlock</h2>
+<p>The conversation stays on your machine in plain text. Each time airlok sends it to the model, it first replaces every API key, token, private key, and other credential it recognises with a placeholder such as <code>&lt;&lt;SECRET_1&gt;&gt;</code>, and the key airlok uses to reach the provider is on that list too. The model reads and writes placeholders. When its reply comes back, placeholders in file edits and commands are swapped back for the real values before anything is written or run, and the terminal shows those values masked. The provider API key is never swapped back into anything. <code>airlok context</code> prints exactly what would be sent, and <code>airlok redactions</code> lists what is detected and how each kind is treated.</p>
+
+<h2>Install</h2>
+<dl class="install">
+<dt>Shell script, macOS and Linux</dt>
+<dd><pre><code>curl -fsSL https://airlok.dev/install.sh | sh</code></pre></dd>
+<dt>Homebrew</dt>
+<dd><pre><code>brew install airlok-dev/tap/airlok</code></pre></dd>
+<dt>npm</dt>
+<dd><pre><code>npm install -g airlok</code></pre></dd>
+<dt>Cargo, built from source</dt>
+<dd><pre><code>cargo install --git https://github.com/airlok-dev/airlok airlok --locked</code></pre></dd>
+</dl>
+
+<p class="links"><a href="/docs/">Documentation</a> <a href="https://github.com/airlok-dev/airlok">Source on GitHub</a> <a href="https://github.com/airlok-dev/airlok/releases">Releases</a></p>
+<footer>MIT or Apache-2.0</footer>
+</main>
+</body>
+</html>

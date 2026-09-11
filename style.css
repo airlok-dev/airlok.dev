@@ -1,0 +1,61 @@
+:root {
+  color-scheme: light dark;
+  --fg: #1b1b1b;
+  --bg: #fdfdfc;
+  --muted: #5c5c5c;
+  --rule: #dcdcd8;
+  --code-bg: #f1f1ee;
+  --link: #1d4ed8;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e6e6e3;
+    --bg: #141414;
+    --muted: #a3a3a0;
+    --rule: #333330;
+    --code-bg: #1f1f1e;
+    --link: #8ab4ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+main { max-width: 46rem; margin: 0 auto; padding: 2.5rem 1.25rem 3rem; }
+
+h1 { font-size: 1.9rem; margin: 0 0 0.75rem; }
+h2 { font-size: 1.15rem; margin: 2rem 0 0.5rem; }
+h3 { font-size: 1rem; margin: 1.5rem 0 0.4rem; }
+p { margin: 0 0 1rem; }
+a { color: var(--link); }
+
+code, pre {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9em;
+}
+code { background: var(--code-bg); padding: 0.1em 0.3em; border-radius: 3px; }
+pre { background: var(--code-bg); padding: 0.7rem 1rem; overflow-x: auto; border-radius: 4px; line-height: 1.45; margin: 0 0 1rem; }
+pre code { background: none; padding: 0; font-size: 1em; }
+
+.install dt { color: var(--muted); font-size: 0.9rem; margin-top: 0.6rem; }
+.install dd { margin: 0.2rem 0 0; }
+.install pre { margin: 0; }
+
+.table { overflow-x: auto; margin: 0 0 1rem; }
+table { border-collapse: collapse; width: 100%; font-size: 0.95em; }
+th, td { text-align: left; vertical-align: top; padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--rule); }
+
+nav, footer, .links, .note { color: var(--muted); font-size: 0.95rem; }
+nav a, footer a, .links a { margin-right: 1rem; }
+nav { margin-bottom: 1.5rem; }
+.links { margin-top: 1.75rem; }
+footer { margin-top: 2.5rem; padding-top: 1rem; border-top: 1px solid var(--rule); }
+.toc { padding-left: 1.2rem; }
+section { margin-top: 2.5rem; }

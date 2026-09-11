@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  html:
+    name: Validate HTML
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: html-validate
+        run: npx --yes html-validate@11.15.0 index.html docs/index.html
+      - name: No scripts, fonts, or third-party resources
+        run: |
+          status=0
+          if grep -rniE '<script|<iframe|<object|<embed' --include='*.html' .; then
+            echo "::error::a page embeds a script or other active content"; status=1
+          fi
+          if grep -rniE '(src|srcset)="(https?:)?//' --include='*.html' .; then
+            echo "::error::a page loads a resource from another origin"; status=1
+          fi
+          if grep -rniE '<link[^>]*href="(https?:)?//' --include='*.html' .; then
+            echo "::error::a page loads a stylesheet or font from another origin"; status=1
+          fi
+          if grep -rniE '@import|@font-face|url\(' --include='*.css' .; then
+            echo "::error::the stylesheet imports, loads fonts, or fetches a url()"; status=1
+          fi
+          exit $status
+
+  shellcheck:
+    name: Check install.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck 0.11.0
+        run: |
+          curl -fsSL https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz | tar -xJ
+          ./shellcheck-v0.11.0/shellcheck --version
+      - name: shellcheck
+        run: ./shellcheck-v0.11.0/shellcheck -s sh install.sh
+      - name: Parses under dash
+        run: dash -n install.sh
