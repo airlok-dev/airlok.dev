@@ -36,6 +36,26 @@ jobs:
           fi
           exit $status
 
+  docs:
+    name: Docs page matches the README
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The page is generated, so hand edits must not survive. Rebuild it for
+      # the tag it names and fail if the result differs.
+      - name: Rebuild the page for the tag it names
+        run: |
+          tag=$(sed -n 's|.*releases/tag/\(v[0-9][^"]*\)".*|\1|p' docs/index.html | head -1)
+          if [ -z "$tag" ]; then
+            echo "::error::docs/index.html does not name a tag"; exit 1
+          fi
+          echo "the page documents $tag"
+          scripts/build-docs "$tag"
+          if ! git diff --exit-code -- docs/index.html; then
+            echo "::error::docs/index.html is not what scripts/build-docs $tag writes"
+            exit 1
+          fi
+
   shellcheck:
     name: Check install.sh
     runs-on: ubuntu-latest

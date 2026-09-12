@@ -5,21 +5,146 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <title>airlok documentation</title>
-<meta name="description" content="Configuration, AIRLOK.md, redaction, and sessions in airlok.">
+<meta name="description" content="Install, sessions, plan mode, tools, configuration, and redaction in airlok, generated from the README.">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">This page mirrors sections of the <a href="https://github.com/airlok-dev/airlok#readme">README</a> for airlok 0.4.1.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.5.0">v0.5.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.5.0/README.md">README</a> at that tag.</p>
 <ul class="toc">
-<li><a href="#configuration">Configuration</a></li>
-<li><a href="#airlok-md">Context and AIRLOK.md</a></li>
-<li><a href="#redaction">Redaction: what comes back, and what never does</a></li>
+<li><a href="#install">Install</a></li>
+<li><a href="#usage">Usage</a></li>
+<li><a href="#repl">Interactive sessions</a></li>
 <li><a href="#sessions">Sessions</a></li>
+<li><a href="#tools">Tools</a></li>
+<li><a href="#airlok-md">Context and AIRLOK.md</a></li>
+<li><a href="#configuration">Configuration</a></li>
+<li><a href="#redaction">Redaction: what comes back, and what never does</a></li>
 </ul>
 
+<section id="install">
+<h2>Install</h2>
+<pre><code class="language-sh">curl -fsSL https://airlok.dev/install.sh | sh
+# or
+brew install airlok-dev/tap/airlok
+# or
+npm install -g airlok
+# or, built from source
+cargo install --git https://github.com/airlok-dev/airlok airlok --locked</code></pre>
+<p><code>install.sh</code> installs the latest release for macOS or Linux. It checks the release's installer against the sha256 digest GitHub publishes for it, then runs it; set <code>AIRLOK_NO_MODIFY_PATH=1</code> to leave your shell profile alone.</p>
+</section>
+<section id="usage">
+<h2>Usage</h2>
+<pre><code class="language-sh">airlok                                         # interactive session in the current directory
+airlok "create hello.txt containing hello"     # run one task in the current directory
+airlok --plan                                  # start in plan mode: the model researches, then proposes a plan
+airlok --resume                                # continue the latest saved session here (REPL, or with a task)
+airlok --resume=&lt;id&gt; "summarise what we did"   # continue a particular one
+airlok sessions                                # list saved sessions for this directory
+airlok sessions rm &lt;id&gt;                        # delete one
+airlok sessions clean --older-than 30d         # delete old sessions from every directory
+airlok -v "..."                                # debug logs on stderr
+airlok -y "..."                                # no confirmations (prints a warning)
+airlok --provider openai --model gpt-5.5 "..." # override the provider and model for one run
+airlok --show-redactions "..."                 # list what was redacted (kind and length only)
+airlok config init                             # write a commented config to the user path
+airlok config show                             # print the effective config and the key source
+airlok context                                 # print the context block sent with the system prompt, after redaction
+airlok redactions                              # list what the redactor detects and how each kind is treated</code></pre>
+<p>Every <code>write_file</code> and <code>edit_file</code> call shows a diff with line numbers, three lines of context, +/- gutters, and syntax highlighting, and asks <code>Apply? [y]es / [n]o / [a]ll / [q]uit</code>. A diff longer than 40 lines stops at <code>... N more lines, [v] to view all</code>; <code>v</code> prints the rest and asks again. Every <code>bash</code> call that is not on the allow list shows the command and asks the same way. <code>y</code> applies this one, <code>n</code> sends a rejection back to the model so it can adapt, <code>a</code> approves the rest of that kind for the run, and <code>q</code> aborts the run with a non-zero exit. Prompts are read from the terminal, not stdin, so piped input still works; without a terminal, pass <code>--yes</code> or turn the confirmations off in the config.</p>
+<p>Model output is rendered as markdown (headings, emphasis, lists, tables, highlighted code) when stdout is a terminal; set <code>NO_COLOR</code> or redirect stdout for plain text. Runs of read-only tool calls show on the status line and end with one <code>read N files</code> line; <code>-v</code> shows every call.</p>
+</section>
+<section id="repl">
+<h2>Interactive sessions</h2>
+<p><code>airlok</code> with no task opens a session. It starts with one line (version, model, directory, <code>/help for commands</code>), the prompt shows the model and the directory (<code>gpt-5.5 airlok&gt; </code>), each line you send is one turn, and the conversation carries across turns. After each turn a dim footer shows the model, how full the context is, and the session id.</p>
+<p>While a turn runs, a status line below the output shows a spinner, what airlok is doing (<code>thinking</code>, <code>reading src/main.rs</code>, <code>running cargo test</code>), the seconds so far, and the tokens used this turn. It is cleared before anything else prints. It is off when stdout is not a terminal, when <code>NO_COLOR</code> is set, and with <code>-v</code>, whose logs share the terminal.</p>
+<div class="table">
+<table>
+<thead><tr><th>Key</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>Enter</td><td>send the line</td></tr>
+<tr><td>Alt+Enter</td><td>start a new line in the same message. Shift+Enter does the same in terminals that send Esc then Enter for it; most send a plain Enter</td></tr>
+<tr><td>Tab</td><td>take the first <code>/</code> command or <code>@</code> path on offer; Tab again cycles through the rest</td></tr>
+<tr><td>Right arrow</td><td>take the rest of the <code>/</code> command shown after the cursor</td></tr>
+<tr><td>Esc or Ctrl-C</td><td>during a turn, cancel it</td></tr>
+<tr><td>Ctrl-C</td><td>at the prompt, clear the line; on an empty line it does nothing</td></tr>
+<tr><td>Ctrl-D</td><td>save and quit</td></tr>
+<tr><td>Ctrl-R</td><td>search this run's history; Up and Down step through it</td></tr>
+</tbody>
+</table>
+</div>
+<p>A cancelled turn keeps the text streamed so far in the history, marked as interrupted; tool calls that had not run are dropped, and you get the prompt back. Keys typed while a turn runs are kept and start the next prompt.</p>
+<div class="table">
+<table>
+<thead><tr><th>Input</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>/</code> at the start</td><td>a slash command. A menu of the matching commands and what they do shows as you type. A prefix runs the first match in the menu (<code>/co</code> is <code>/cost</code>); an unknown name gets the closest command suggested</td></tr>
+<tr><td><code>@</code> anywhere</td><td><code>@</code> and part of a path offers matching files and directories from the working directory, fuzzy and gitignore-aware. Tab inserts the path as plain text, without the <code>@</code></td></tr>
+<tr><td><code>!</code> at the start</td><td>runs the rest with <code>sh -c</code> in the working directory and prints the output. The command and its output go into the conversation for the model's next turn. <code>bash_timeout_secs</code> applies, and the command cannot read input</td></tr>
+<tr><td><code>#</code> at the start</td><td>appends the rest to <code>./AIRLOK.md</code> as a list item, creating the file, and rebuilds the context block so it applies from the next turn. A new <code>AIRLOK.md</code> takes precedence over a <code>CLAUDE.md</code> or <code>AGENTS.md</code> beside it, and the confirmation says so. Instructions are read from the repository root, so from a subdirectory the note lands in a file the context block does not read</td></tr>
+</tbody>
+</table>
+</div>
+<div class="table">
+<table>
+<thead><tr><th>Command</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>/help</code></td><td>list the commands</td></tr>
+<tr><td><code>/model [&lt;id&gt;]</code></td><td>show the model, or use <code>&lt;id&gt;</code> for the rest of the session; not validated, the provider rejects a bad id on the next turn</td></tr>
+<tr><td><code>/plan</code></td><td>turn plan mode on or off</td></tr>
+<tr><td><code>/go</code></td><td>carry out the plan from plan mode, back in normal mode</td></tr>
+<tr><td><code>/provider [&lt;name&gt;]</code></td><td>show the provider, or switch to <code>anthropic</code> or <code>openai</code> if a key is available for it; says which key is missing otherwise</td></tr>
+<tr><td><code>/cost</code></td><td>tokens used so far, and whether they are estimates</td></tr>
+<tr><td><code>/compact</code></td><td>summarise older turns to free context</td></tr>
+<tr><td><code>/config</code></td><td>the effective configuration</td></tr>
+<tr><td><code>/redactions</code></td><td>what was redacted before leaving this machine (kind and length only)</td></tr>
+<tr><td><code>/clear</code></td><td>start a new session; the current one stays saved</td></tr>
+<tr><td><code>/exit</code></td><td>save and quit; <code>/quit</code> works too</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="plan-mode">Plan mode</h3>
+<p><code>/plan</code>, or <code>--plan</code> at startup, switches to plan mode, and the prompt shows <code>[plan]</code>. The model gets only the read-only tools (<code>read_file</code>, <code>glob</code>, <code>grep</code>, <code>list_dir</code>): <code>write_file</code>, <code>edit_file</code>, and <code>bash</code> are left out of the request, the system prompt says they are unavailable, and a call to one of them anyway is refused. The model researches the task and ends its reply with a plan. <code>/go</code> leaves plan mode and sends that plan back as the task, with every tool available again. <code>/plan</code> a second time leaves without running anything. Per-model settings such as <code>reasoning_effort</code> are sent the same way in both modes. Plan mode is not saved with the session, so <code>--resume</code> starts in normal mode unless <code>--plan</code> is given.</p>
+<h3 id="providers-in-a-session">Providers in a session</h3>
+<p><code>[provider]</code> settings (<code>api_key_cmd</code>, <code>api_key_env</code>, <code>base_url</code>) belong to the configured provider. After <code>/provider</code> switches to the other one, it runs on that provider's default model and its default key variables (<code>ANTHROPIC_API_KEY</code>; <code>AZURE_OPENAI_API_KEY</code> or <code>OPENAI_API_KEY</code>); switching back restores the configured one. Both changes are written to the session file, and <code>--resume</code> continues on the session's last model when it used the configured provider and <code>--model</code> is not given.</p>
+</section>
+<section id="sessions">
+<h2>Sessions</h2>
+<p>Every turn, one-shot or interactive, is saved under <code>$XDG_DATA_HOME/airlok/sessions/&lt;hash of the directory&gt;/</code> (<code>~/.local/share/airlok</code> by default). <code>airlok --resume</code> picks up the latest session for the directory; it rebuilds the context block, so the model sees the current tree and git state, and adds a note with the resume time. <code>airlok sessions</code> lists what is there.</p>
+<p>A session file holds the plaintext conversation and the real value behind every placeholder, because that is what rehydration on resume needs. That is why the file is written with mode 0600 in a 0700 directory, and why the provider API key is the one thing left out: it is stored blank and re-read from your config on every start.</p>
+<p>Long sessions are compacted. Once the last request used more than <code>compact_at</code> (default 0.75) of <code>context_window</code> (default 200k tokens; set it for your model), the next turn first asks the model for a summary of everything except the last <code>keep_recent_turns</code> turns and replaces those older turns with it. The summary request goes through the redactor like every other request. You see a dim <code>compacted: 180k -&gt; 22k tokens</code> line; <code>/compact</code> does it on demand. Token counts come from the provider; when a provider reports none, airlok estimates at chars/4 and <code>/cost</code> says so.</p>
+</section>
+<section id="tools">
+<h2>Tools</h2>
+<div class="table">
+<table>
+<thead><tr><th>Tool</th><th>Asks?</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>read_file(path, offset?, limit?)</code></td><td>no</td><td>Read a text file, optionally a window of lines. Binary files are refused.</td></tr>
+<tr><td><code>glob(pattern, path?)</code></td><td>no</td><td>List files matching a glob, gitignore-aware, at most 500.</td></tr>
+<tr><td><code>grep(pattern, path?, include?)</code></td><td>no</td><td>Regex search returning <code>file:line:text</code>, gitignore-aware, at most 200 lines.</td></tr>
+<tr><td><code>list_dir(path)</code></td><td>no</td><td>Entries with type and size.</td></tr>
+<tr><td><code>edit_file(path, old, new)</code></td><td>diff</td><td>Replace <code>old</code> with <code>new</code>; <code>old</code> must occur exactly once, otherwise the model is told how many matches there were.</td></tr>
+<tr><td><code>write_file(path, content)</code></td><td>diff</td><td>Create or overwrite a file.</td></tr>
+<tr><td><code>bash(command)</code></td><td>unless allow-listed</td><td>Run a shell command in the working directory.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Tool results over 50 KiB are cut with a marker telling the model to page with <code>read_file</code>'s <code>offset</code> and <code>limit</code>.</p>
+</section>
+<section id="airlok-md">
+<h2>Context and AIRLOK.md</h2>
+<p>Every run starts with a context block in the system prompt: the working directory, OS and shell, the git branch with <code>git status --short</code> and the last five commit subjects, a gitignore-aware file tree (four levels, at most 200 entries), and project instructions. Instructions come from <code>AIRLOK.md</code> in the repository root, or <code>CLAUDE.md</code> or <code>AGENTS.md</code> if there is no <code>AIRLOK.md</code>, followed by <code>~/.config/airlok/AIRLOK.md</code>. The block goes through the redactor like everything else, and <code>airlok context</code> prints exactly what would be sent.</p>
+<p>A short <code>AIRLOK.md</code>:</p>
+<pre><code class="language-markdown"># airlok instructions
+
+- Run `cargo test --workspace` before saying a change is done.
+- Never touch files under `vendor/`.
+- Commit messages: imperative subject, no trailing period.</code></pre>
+<p><code>[context] max_bytes</code> (default 32768) caps the block; the tree is cut to top-level directories first, then the instructions are truncated.</p>
+</section>
 <section id="configuration">
 <h2>Configuration</h2>
 <p>Precedence, highest first: CLI flags, <code>./airlok.toml</code> in the working directory, the user file, built-in defaults. The user file is <code>$XDG_CONFIG_HOME/airlok/config.toml</code>, which is <code>~/.config/airlok/config.toml</code> on macOS and Linux. <code>airlok config init</code> writes it with every key commented out.</p>
@@ -49,7 +174,10 @@ bash_denylist = ["rm -rf", "git push --force", "sudo"]
 max_bytes = 32768        # cap on the context block; tree is cut first, then instructions
 
 [redact]
-show_secrets_in_output = false   # show secrets from files in full in the terminal instead of masked</code></pre>
+show_secrets_in_output = false   # show secrets from files in full in the terminal instead of masked
+
+[models."gpt-6-astra"]    # settings for one model id (the deployment name on Azure); none by default
+reasoning_effort = "none" # openai only, sent as reasoning_effort; not validated</code></pre>
 <p>For openai, <code>base_url</code> falls back to the <code>OPENAI_BASE_URL</code> environment variable when the config does not set it.</p>
 <h3 id="azure-openai">Azure OpenAI</h3>
 <pre><code class="language-toml">[provider]
@@ -57,51 +185,14 @@ name = "openai"
 model = "&lt;deployment-name&gt;"
 base_url = "https://&lt;resource&gt;.openai.azure.com/openai/v1"
 api_key_cmd = "az cognitiveservices account keys list -n &lt;resource&gt; -g &lt;resource-group&gt; --query key1 -o tsv"</code></pre>
+<p>Azure's <code>gpt-6-astra</code> accepts tools on Chat Completions only with reasoning off, so it needs <code>[models."gpt-6-astra"]</code> with <code>reasoning_effort = "none"</code>. Without it, airlok shows the provider's error and names that setting. The entry applies however the model is chosen, <code>/model gpt-6-astra</code> included.</p>
 <p>With this in the user config, plain <code>airlok "..."</code> works. The key is sent in Azure's <code>api-key</code> header, chosen from the host. No shell wrapper or exported variable is needed.</p>
 </section>
-
-<section id="airlok-md">
-<h2>Context and AIRLOK.md</h2>
-<p>Every run starts with a context block in the system prompt: the working directory, OS and shell, the git branch with <code>git status --short</code> and the last five commit subjects, a gitignore-aware file tree (four levels, at most 200 entries), and project instructions. Instructions come from <code>AIRLOK.md</code> in the repository root, or <code>CLAUDE.md</code> or <code>AGENTS.md</code> if there is no <code>AIRLOK.md</code>, followed by <code>~/.config/airlok/AIRLOK.md</code>. The block goes through the redactor like everything else, and <code>airlok context</code> prints exactly what would be sent.</p>
-<p>A short <code>AIRLOK.md</code>:</p>
-<pre><code class="language-markdown"># airlok instructions
-
-- Run `cargo test --workspace` before saying a change is done.
-- Never touch files under `vendor/`.
-- Commit messages: imperative subject, no trailing period.</code></pre>
-<p><code>[context] max_bytes</code> (default 32768) caps the block; the tree is cut to top-level directories first, then the instructions are truncated.</p>
-</section>
-
 <section id="redaction">
 <h2>Redaction: what comes back, and what never does</h2>
 <p>Every placeholder belongs to one of two classes, listed by <code>airlok redactions</code>. Secrets found in your files and in tool output are <code>rehydrate</code>: the real value is restored into files and commands, so edits keep working, and shown masked in the terminal (first four characters and the length) unless <code>[redact] show_secrets_in_output = true</code>. The provider API key is <code>redact-only</code>: it is never restored anywhere. If the model echoes its placeholder it prints as <code>[redacted: the provider API key]</code>, and a tool call carrying it is refused with a message to the model. <code>--show-redactions</code> lists each placeholder's kind, length, and class, never the value.</p>
 <p>The key is read from exactly one place. <code>api_key_cmd</code> wins if set, then <code>api_key_env</code>, then the provider default: <code>ANTHROPIC_API_KEY</code> for anthropic, and <code>AZURE_OPENAI_API_KEY</code> then <code>OPENAI_API_KEY</code> for openai. A command runs once per process and its output is never logged. <code>airlok config show</code> prints the env var name or the command, never the value. Whatever key is in use is also added to the redactor, so it can never leave the machine inside a file or command output either.</p>
 <p>Allow-list entries match on leading tokens (<code>git status</code> allows <code>git status --short</code>, not <code>git push</code>). Deny-list entries match anywhere, in every part of a chained command, and win over the allow list. Flags are parsed rather than compared as text: the <code>rm -rf</code> entry also catches <code>rm -fr</code>, <code>rm -r -f</code>, <code>rm -Rf</code>, and <code>rm --recursive --force</code>, and <code>git push --force</code> also catches <code>git push -f</code>. A command with shell operators (<code>;</code>, <code>&amp;&amp;</code>, <code>|</code>, <code>&gt;</code>, <code>$(</code>, and so on) always asks, whatever its first word.</p>
-</section>
-
-<section id="sessions">
-<h2>Sessions</h2>
-<p><code>airlok</code> with no task opens a session. The prompt shows the model and the directory (<code>gpt-5.5 airlok&gt; </code>), each line you type is one turn, and the conversation carries across turns. Ctrl-C during a turn cancels it: the text streamed so far stays in the history marked as interrupted, tool calls that had not run are dropped, and you get the prompt back. Ctrl-D or <code>/exit</code> saves and quits.</p>
-<div class="table">
-<table>
-<thead><tr><th>Command</th><th>What it does</th></tr></thead>
-<tbody>
-<tr><td><code>/help</code></td><td>list the commands</td></tr>
-<tr><td><code>/model [&lt;id&gt;]</code></td><td>show the model, or use <code>&lt;id&gt;</code> for the rest of the session; not validated, the provider rejects a bad id on the next turn</td></tr>
-<tr><td><code>/provider [&lt;name&gt;]</code></td><td>show the provider, or switch to <code>anthropic</code> or <code>openai</code> if a key is available for it; says which key is missing otherwise</td></tr>
-<tr><td><code>/clear</code></td><td>start a new session; the current one stays saved</td></tr>
-<tr><td><code>/compact</code></td><td>summarise older turns to free context</td></tr>
-<tr><td><code>/cost</code></td><td>tokens used so far, and whether they are estimates</td></tr>
-<tr><td><code>/redactions</code></td><td>what was redacted before leaving this machine (kind and length only)</td></tr>
-<tr><td><code>/config</code></td><td>the effective configuration</td></tr>
-<tr><td><code>/exit</code></td><td>save and quit</td></tr>
-</tbody>
-</table>
-</div>
-<p><code>[provider]</code> settings (<code>api_key_cmd</code>, <code>api_key_env</code>, <code>base_url</code>) belong to the configured provider. After <code>/provider</code> switches to the other one, it runs on that provider's default model and its default key variables (<code>ANTHROPIC_API_KEY</code>; <code>AZURE_OPENAI_API_KEY</code> or <code>OPENAI_API_KEY</code>); switching back restores the configured one. Both changes are written to the session file, and <code>--resume</code> continues on the session's last model when it used the configured provider and <code>--model</code> is not given.</p>
-<p>Every turn, one-shot or interactive, is saved under <code>$XDG_DATA_HOME/airlok/sessions/&lt;hash of the directory&gt;/</code> (<code>~/.local/share/airlok</code> by default). <code>airlok --resume</code> picks up the latest session for the directory; it rebuilds the context block, so the model sees the current tree and git state, and adds a note with the resume time. <code>airlok sessions</code> lists what is there.</p>
-<p>A session file holds the plaintext conversation and the real value behind every placeholder, because that is what rehydration on resume needs. That is why the file is written with mode 0600 in a 0700 directory, and why the provider API key is the one thing left out: it is stored blank and re-read from your config on every start.</p>
-<p>Long sessions are compacted. Once the last request used more than <code>compact_at</code> (default 0.75) of <code>context_window</code> (default 200k tokens; set it for your model), the next turn first asks the model for a summary of everything except the last <code>keep_recent_turns</code> turns and replaces those older turns with it. The summary request goes through the redactor like every other request. You see a dim <code>compacted: 180k -&gt; 22k tokens</code> line; <code>/compact</code> does it on demand. Token counts come from the provider; when a provider reports none, airlok estimates at chars/4 and <code>/cost</code> says so.</p>
 </section>
 
 <footer><a href="/">airlok.dev</a> <a href="https://github.com/airlok-dev/airlok">Source on GitHub</a></footer>
