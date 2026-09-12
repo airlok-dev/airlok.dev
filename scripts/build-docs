@@ -33,11 +33,16 @@ class Section:
 
     The first heading in parts supplies the section body under an h2 with
     title; every later heading becomes an h3 keeping its README title.
+
+    A section marked optional is skipped when the README does not have it,
+    so a tag from before the section existed still builds. A required one
+    that is missing fails the build instead of quietly vanishing.
     """
 
     id: str
     title: str
     parts: tuple
+    optional: bool = False
 
 
 SECTIONS = (
@@ -50,6 +55,7 @@ SECTIONS = (
     ),
     Section("sessions", "Sessions", ("Sessions",)),
     Section("tools", "Tools", ("Tools",)),
+    Section("mcp", "MCP servers", ("MCP servers",), optional=True),
     Section("airlok-md", "Context and AIRLOK.md", ("Context and AIRLOK.md",)),
     Section("configuration", "Configuration", ("Configuration", "Azure OpenAI")),
     Section(
@@ -210,9 +216,15 @@ def body_html(lines):
 
 
 def section_html(section, found):
+    if section.optional and section.parts[0] not in found:
+        warn(f"the README has no {section.parts[0]!r} section, leaving it off the page")
+        return []
     out = [f'<section id="{section.id}">', f"<h2>{escape(section.title)}</h2>"]
     for index, part in enumerate(section.parts):
         if part not in found:
+            if section.optional:
+                warn(f"the README has no heading {part!r}, leaving it off the page")
+                continue
             raise Problem(f"the README has no heading {part!r}")
         if index:
             slug = re.sub(r"[^a-z0-9]+", "-", part.lower()).strip("-")
@@ -228,11 +240,15 @@ def page(tag, repo, found):
         if title not in used and title not in SKIP:
             warn(f"the README section {title!r} is not on the docs page")
     body = []
+    shown = []
     for section in SECTIONS:
-        body += section_html(section, found)
+        html = section_html(section, found)
+        if html:
+            body += html
+            shown.append(section)
     toc = "\n".join(
         f'<li><a href="#{section.id}">{escape(section.title)}</a></li>'
-        for section in SECTIONS
+        for section in shown
     )
     release = f"https://github.com/{repo}/releases/tag/{tag}"
     readme = f"https://github.com/{repo}/blob/{tag}/README.md"
