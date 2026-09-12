@@ -55,7 +55,12 @@ SECTIONS = (
     ),
     Section("sessions", "Sessions", ("Sessions",)),
     Section("tools", "Tools", ("Tools",)),
-    Section("mcp", "MCP servers", ("MCP servers",), optional=True),
+    Section(
+        "mcp",
+        "MCP servers",
+        ("MCP servers", "airlok's own options", "What a server may and may not do"),
+        optional=True,
+    ),
     Section("airlok-md", "Context and AIRLOK.md", ("Context and AIRLOK.md",)),
     Section("configuration", "Configuration", ("Configuration", "Azure OpenAI")),
     Section(
@@ -135,11 +140,17 @@ def inline(text):
     """Convert one line of markdown text: code spans, then links, then escape."""
     if text.count("`") % 2:
         raise Problem(f"unbalanced backticks in: {text}")
-    if "**" in text or "__" in text:
-        warn(f"emphasis is not converted, it passes through as text: {text}")
     out = []
     for index, chunk in enumerate(text.split("`")):
-        out.append(f"<code>{escape(chunk)}</code>" if index % 2 else links(chunk))
+        if index % 2:
+            out.append(f"<code>{escape(chunk)}</code>")
+            continue
+        # Only outside code spans: `mcp__server__tool` is a name, not
+        # emphasis, and warning about it would bury the warnings that
+        # matter.
+        if "**" in chunk or "__" in chunk:
+            warn(f"emphasis is not converted, it passes through as text: {chunk.strip()}")
+        out.append(links(chunk))
     return "".join(out)
 
 
