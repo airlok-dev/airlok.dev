@@ -12,7 +12,7 @@
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.8.2">v0.8.2</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.8.2/README.md">README</a> at that tag.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.9.0">v0.9.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.9.0/README.md">README</a> at that tag.</p>
 <ul class="toc">
 <li><a href="#install">Install</a></li>
 <li><a href="#usage">Usage</a></li>
@@ -107,6 +107,15 @@ airlok mcp list                                # the configured MCP servers, whe
 <tr><td><code>/compact</code></td><td>summarise older turns to free context</td></tr>
 <tr><td><code>/config</code></td><td>the effective configuration</td></tr>
 <tr><td><code>/redactions</code></td><td>what was redacted before leaving this machine (kind and length only)</td></tr>
+<tr><td><code>/status</code></td><td>version, provider, model and effort, session and turn count, cwd and branch, config files in effect, MCP servers, redaction counts. Names and counts only, never a value</td></tr>
+<tr><td><code>/context</code></td><td>where the context window is going, part by part, and how near compaction is</td></tr>
+<tr><td><code>/btw &lt;question&gt;</code></td><td>a side question: same model, no tools, and neither it nor the answer joins the task's history</td></tr>
+<tr><td><code>/permissions [&lt;name&gt; &lt;value&gt;]</code></td><td>what airlok asks about, and change one for the session; <code>/permissions save</code> writes them to the project config after showing a diff</td></tr>
+<tr><td><code>/init</code></td><td>propose an AIRLOK.md for this repository, as a diff to approve</td></tr>
+<tr><td><code>/copy [&lt;n&gt;\|code]</code></td><td>copy the last reply to the clipboard; a number takes the Nth from the end, <code>code</code> the last fenced block</td></tr>
+<tr><td><code>/diff [&lt;path&gt;]</code></td><td>what airlok changed on disk this session, diffed from before its first write</td></tr>
+<tr><td><code>/doctor</code></td><td>check the config, key, provider, MCP servers, git, terminal and storage; <code>airlok doctor</code> does the same and exits non-zero on failure</td></tr>
+<tr><td><code>/goal [&lt;statement&gt;\|clear]</code></td><td>what the session is working toward, kept in the system prompt every turn and shown in the footer</td></tr>
 <tr><td><code>/clear</code></td><td>start a new session; the current one stays saved</td></tr>
 <tr><td><code>/exit</code></td><td>save and quit; <code>/quit</code> works too</td></tr>
 </tbody>
