@@ -55,7 +55,12 @@ SECTIONS = (
     ),
     Section("sessions", "Sessions", ("Sessions",)),
     Section("tools", "Tools", ("Tools",)),
-    Section("mcp", "MCP servers", ("MCP servers",), optional=True),
+    Section(
+        "mcp",
+        "MCP servers",
+        ("MCP servers", "airlok's own options", "What a server may and may not do"),
+        optional=True,
+    ),
     Section("airlok-md", "Context and AIRLOK.md", ("Context and AIRLOK.md",)),
     Section("configuration", "Configuration", ("Configuration", "Azure OpenAI")),
     Section(
