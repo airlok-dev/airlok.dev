@@ -1,0 +1,303 @@
+#!/usr/bin/env python3
+"""Generate docs/index.html from the airlok README at a released tag.
+
+Fetches the README from raw.githubusercontent.com, converts the documented
+sections to this site's HTML, and writes the page. Standard library only, so
+the site keeps no runtime dependencies and the output stays deterministic:
+the same tag always produces the same bytes.
+
+  scripts/build-docs v0.5.0
+  scripts/build-docs v0.5.0 --readme ../airlok/README.md   # no network
+"""
+
+import argparse
+import html
+import re
+import sys
+import urllib.error
+import urllib.request
+from dataclasses import dataclass
+from pathlib import Path
+
+REPO = "airlok-dev/airlok"
+RAW = "https://raw.githubusercontent.com/{repo}/{tag}/README.md"
+TAG = re.compile(r"^v[0-9]+\.[0-9]+\.[0-9]+[0-9A-Za-z.+-]*$")
+HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+LINK = re.compile(r"\[([^\]]+)\]\(([^)\s]+)\)")
+ROOT = Path(__file__).resolve().parent.parent
+
+
+@dataclass(frozen=True)
+class Section:
+    """One section of the page, built from one or more README headings.
+
+    The first heading in parts supplies the section body under an h2 with
+    title; every later heading becomes an h3 keeping its README title.
+    """
+
+    id: str
+    title: str
+    parts: tuple
+
+
+SECTIONS = (
+    Section("install", "Install", ("Install",)),
+    Section("usage", "Usage", ("Usage",)),
+    Section(
+        "repl",
+        "Interactive sessions",
+        ("Interactive sessions", "Plan mode", "Providers in a session"),
+    ),
+    Section("sessions", "Sessions", ("Sessions",)),
+    Section("tools", "Tools", ("Tools",)),
+    Section("airlok-md", "Context and AIRLOK.md", ("Context and AIRLOK.md",)),
+    Section("configuration", "Configuration", ("Configuration", "Azure OpenAI")),
+    Section(
+        "redaction",
+        "Redaction: what comes back, and what never does",
+        ("What comes back, and what never does",),
+    ),
+)
+
+# Headings that belong to the README alone, so they raise no warning.
+SKIP = ("airlok", "Licence")
+
+DESCRIPTION = (
+    "Install, sessions, plan mode, tools, configuration, and redaction in "
+    "airlok, generated from the README."
+)
+
+
+class Problem(Exception):
+    """Something the page cannot be built from."""
+
+
+def fetch(repo, tag):
+    url = RAW.format(repo=repo, tag=tag)
+    try:
+        with urllib.request.urlopen(url, timeout=30) as response:
+            return response.read().decode("utf-8")
+    except urllib.error.HTTPError as err:
+        raise Problem(f"{url} returned {err.code}") from err
+    except OSError as err:
+        raise Problem(f"cannot fetch {url}: {err}") from err
+
+
+def headings(markdown):
+    """Map each README heading to the lines under it, ignoring fenced code."""
+    found = {}
+    title, body, fence = None, [], None
+    for line in markdown.splitlines():
+        stripped = line.strip()
+        if fence is not None:
+            if stripped.startswith(fence):
+                fence = None
+        elif stripped.startswith("```"):
+            fence = "```"
+        else:
+            match = HEADING.match(line)
+            if match:
+                if title is not None:
+                    found[title] = body
+                title, body = match.group(2), []
+                if title in found:
+                    raise Problem(f"the README has two headings called {title!r}")
+                continue
+        if title is not None:
+            body.append(line)
+    if title is not None:
+        found[title] = body
+    return found
+
+
+def escape(text):
+    return html.escape(text, quote=False)
+
+
+def links(text):
+    out, at = [], 0
+    for match in LINK.finditer(text):
+        out.append(escape(text[at : match.start()]))
+        href = html.escape(match.group(2), quote=True)
+        out.append(f'<a href="{href}">{escape(match.group(1))}</a>')
+        at = match.end()
+    out.append(escape(text[at:]))
+    return "".join(out)
+
+
+def inline(text):
+    """Convert one line of markdown text: code spans, then links, then escape."""
+    if text.count("`") % 2:
+        raise Problem(f"unbalanced backticks in: {text}")
+    if "**" in text or "__" in text:
+        warn(f"emphasis is not converted, it passes through as text: {text}")
+    out = []
+    for index, chunk in enumerate(text.split("`")):
+        out.append(f"<code>{escape(chunk)}</code>" if index % 2 else links(chunk))
+    return "".join(out)
+
+
+def cells(row):
+    """Split a table row on the pipes that are outside code spans."""
+    found, current, tick = [], [], False
+    for char in row.strip():
+        if char == "`":
+            tick = not tick
+            current.append(char)
+        elif char == "|" and not tick:
+            found.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    found.append("".join(current).strip())
+    if found and not found[0]:
+        found.pop(0)
+    if found and not found[-1]:
+        found.pop()
+    return found
+
+
+def table(rows):
+    if len(rows) < 3 or set(rows[1]) - set("|-: "):
+        raise Problem(f"a table needs a header, a rule, and a row: {rows[0]}")
+    head = "".join(f"<th>{inline(cell)}</th>" for cell in cells(rows[0]))
+    out = ['<div class="table">', "<table>", f"<thead><tr>{head}</tr></thead>", "<tbody>"]
+    for row in rows[2:]:
+        body = "".join(f"<td>{inline(cell)}</td>" for cell in cells(row))
+        out.append(f"<tr>{body}</tr>")
+    out += ["</tbody>", "</table>", "</div>"]
+    return out
+
+
+def body_html(lines):
+    out, at = [], 0
+    while at < len(lines):
+        line = lines[at]
+        stripped = line.strip()
+        if not stripped:
+            at += 1
+        elif stripped.startswith("```"):
+            language = stripped[3:].strip()
+            code, at = [], at + 1
+            while at < len(lines) and not lines[at].strip().startswith("```"):
+                code.append(lines[at].rstrip())
+                at += 1
+            at += 1
+            opening = f' class="language-{language}"' if language else ""
+            out.append(f"<pre><code{opening}>{escape(chr(10).join(code))}</code></pre>")
+        elif line.startswith("|"):
+            rows = []
+            while at < len(lines) and lines[at].startswith("|"):
+                rows.append(lines[at])
+                at += 1
+            out += table(rows)
+        elif stripped.startswith("- "):
+            out.append("<ul>")
+            while at < len(lines) and lines[at].strip().startswith("- "):
+                out.append(f"<li>{inline(lines[at].strip()[2:])}</li>")
+                at += 1
+            out.append("</ul>")
+        else:
+            para = []
+            while at < len(lines):
+                nxt = lines[at].strip()
+                if not nxt or lines[at].startswith("|") or nxt.startswith("```"):
+                    break
+                para.append(nxt)
+                at += 1
+            out.append(f"<p>{inline(' '.join(para))}</p>")
+    return out
+
+
+def section_html(section, found):
+    out = [f'<section id="{section.id}">', f"<h2>{escape(section.title)}</h2>"]
+    for index, part in enumerate(section.parts):
+        if part not in found:
+            raise Problem(f"the README has no heading {part!r}")
+        if index:
+            slug = re.sub(r"[^a-z0-9]+", "-", part.lower()).strip("-")
+            out.append(f'<h3 id="{slug}">{escape(part)}</h3>')
+        out += body_html(found[part])
+    out.append("</section>")
+    return out
+
+
+def page(tag, repo, found):
+    used = {part for section in SECTIONS for part in section.parts}
+    for title in found:
+        if title not in used and title not in SKIP:
+            warn(f"the README section {title!r} is not on the docs page")
+    body = []
+    for section in SECTIONS:
+        body += section_html(section, found)
+    toc = "\n".join(
+        f'<li><a href="#{section.id}">{escape(section.title)}</a></li>'
+        for section in SECTIONS
+    )
+    release = f"https://github.com/{repo}/releases/tag/{tag}"
+    readme = f"https://github.com/{repo}/blob/{tag}/README.md"
+    head = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>airlok documentation</title>
+<meta name="description" content="{DESCRIPTION}">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+<nav><a href="/">airlok</a> <a href="https://github.com/{repo}">GitHub</a></nav>
+<h1>Documentation</h1>
+<p class="note">Docs for airlok <a href="{release}">{tag}</a>, generated from the \
+<a href="{readme}">README</a> at that tag.</p>
+<ul class="toc">
+{toc}
+</ul>
+"""
+    foot = f"""
+<footer><a href="/">airlok.dev</a> <a href="https://github.com/{repo}">Source on GitHub</a></footer>
+</main>
+</body>
+</html>
+"""
+    lines = head.splitlines() + [""] + body + foot.splitlines()
+    return "\n".join(line.rstrip() for line in lines).strip("\n") + "\n"
+
+
+def warn(message):
+    print(f"build-docs: {message}", file=sys.stderr)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Generate docs/index.html from the airlok README at a tag."
+    )
+    parser.add_argument("tag", help="airlok release tag, for example v0.5.0")
+    parser.add_argument("--repo", default=REPO, help=f"source repository, default {REPO}")
+    parser.add_argument("--readme", help="read this file instead of fetching the README")
+    parser.add_argument(
+        "--out", default=str(ROOT / "docs" / "index.html"), help="page to write"
+    )
+    args = parser.parse_args(argv)
+    try:
+        if not TAG.match(args.tag):
+            raise Problem(f"{args.tag!r} is not a release tag such as v0.5.0")
+        markdown = (
+            Path(args.readme).read_text(encoding="utf-8")
+            if args.readme
+            else fetch(args.repo, args.tag)
+        )
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(page(args.tag, args.repo, headings(markdown)), encoding="utf-8")
+    except Problem as problem:
+        warn(str(problem))
+        return 1
+    warn(f"wrote {out} from {args.repo} at {args.tag}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
