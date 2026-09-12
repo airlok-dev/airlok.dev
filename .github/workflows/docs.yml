@@ -1,0 +1,86 @@
+# Regenerates docs/index.html from the airlok README at a released tag and
+# pushes it to main, which is what GitHub Pages serves. The airlok repo fires
+# the repository_dispatch after a release; workflow_dispatch is the manual way
+# to rebuild the page for any tag.
+name: docs
+
+on:
+  repository_dispatch:
+    types: [airlok-release]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: airlok tag to document, for example v0.5.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs
+
+jobs:
+  regenerate:
+    name: Regenerate the docs page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Pick the tag
+        id: pick
+        env:
+          DISPATCH_TAG: ${{ github.event.client_payload.tag }}
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          tag="${DISPATCH_TAG:-$INPUT_TAG}"
+          case "$tag" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "::error::not a release tag: '$tag'"; exit 1 ;;
+          esac
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Build the page
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: scripts/build-docs "$TAG"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # A push from this workflow does not start ci.yml, so the page is
+      # checked here with the same two steps before anything reaches main.
+      - name: html-validate
+        run: npx --yes html-validate@11.15.0 index.html docs/index.html
+
+      - name: No scripts, fonts, or third-party resources
+        run: |
+          status=0
+          if grep -rniE '<script|<iframe|<object|<embed' --include='*.html' .; then
+            echo "::error::a page embeds a script or other active content"; status=1
+          fi
+          if grep -rniE '(src|srcset)="(https?:)?//' --include='*.html' .; then
+            echo "::error::a page loads a resource from another origin"; status=1
+          fi
+          if grep -rniE '<link[^>]*href="(https?:)?//' --include='*.html' .; then
+            echo "::error::a page loads a stylesheet or font from another origin"; status=1
+          fi
+          if grep -rniE '@import|@font-face|url\(' --include='*.css' .; then
+            echo "::error::the stylesheet imports, loads fonts, or fetches a url()"; status=1
+          fi
+          exit $status
+
+      - name: Commit if the page changed
+        env:
+          TAG: ${{ steps.pick.outputs.tag }}
+        run: |
+          if git diff --quiet -- docs/index.html; then
+            echo "docs/index.html already matches $TAG"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html
+          git commit -m "docs: regenerate for $TAG"
+          git push
