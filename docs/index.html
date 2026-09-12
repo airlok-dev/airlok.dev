@@ -12,7 +12,7 @@
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.7.0">v0.7.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.7.0/README.md">README</a> at that tag.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.8.0">v0.8.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.8.0/README.md">README</a> at that tag.</p>
 <ul class="toc">
 <li><a href="#install">Install</a></li>
 <li><a href="#usage">Usage</a></li>
@@ -165,6 +165,7 @@ airlok mcp list                                # the configured MCP servers, whe
 </tbody>
 </table>
 </div>
+<p>A <code>.mcp.json</code> arrives with a clone, so a project-scoped server starts only once this checkout has been asked about it. On first sight of one, or of a definition that changed since the last answer, airlok lists the servers and the commands they would run and asks once. The answer is recorded in <code>.airlok/</code>, per repository and gitignored. Until then the server shows as pending in <code>airlok mcp list</code> and nothing is started, and listing never counts as approving. <code>airlok mcp reset-project-choices</code> forgets the answer so the next run asks again. Servers from your own user file, your local file, or a <code>[[mcp]]</code> block are not gated: you wrote those.</p>
 <p><code>${VAR}</code> and <code>${VAR:-default}</code> expand from the environment in <code>command</code>, <code>args</code>, <code>env</code>, <code>url</code>, and <code>headers</code>. A variable that is unset or empty with no default is an error naming it, rather than an empty string that fails later in a way nobody can read. For a secret, prefer <code>env_cmd</code> and <code>header_cmd</code>, which take the value from a command's stdout: nothing is written in the file, and nothing has to sit in your environment where every other process can read it.</p>
 <p>Managing them:</p>
 <div class="table">
@@ -173,6 +174,8 @@ airlok mcp list                                # the configured MCP servers, whe
 <tbody>
 <tr><td><code>airlok mcp list</code></td><td>every server, its scope, whether it answers, and its tools</td></tr>
 <tr><td><code>airlok mcp add &lt;name&gt; --scope user -- npx -y server-filesystem .</code></td><td>write a stdio server; <code>--url</code> with <code>--transport http</code> for an http one</td></tr>
+<tr><td><code>airlok mcp add-json &lt;name&gt; '&lt;json&gt;'</code></td><td>write a server from an entry pasted as JSON</td></tr>
+<tr><td><code>airlok mcp reset-project-choices</code></td><td>forget whether this repository's own <code>.mcp.json</code> servers may start</td></tr>
 <tr><td><code>airlok mcp get &lt;name&gt;</code></td><td>the resolved entry and which file it came from</td></tr>
 <tr><td><code>airlok mcp remove &lt;name&gt; [--scope ...]</code></td><td>take it out again</td></tr>
 <tr><td><code>airlok mcp import &lt;path&gt;</code></td><td>merge another tool's <code>mcpServers</code> file into a scope</td></tr>
