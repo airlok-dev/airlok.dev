@@ -12,7 +12,7 @@
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.6.1">v0.6.1</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.6.1/README.md">README</a> at that tag.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.7.0">v0.7.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.7.0/README.md">README</a> at that tag.</p>
 <ul class="toc">
 <li><a href="#install">Install</a></li>
 <li><a href="#usage">Usage</a></li>
@@ -139,40 +139,81 @@ airlok mcp list                                # the configured MCP servers, whe
 </section>
 <section id="mcp">
 <h2>MCP servers</h2>
-<p>airlok can offer the model tools from external <a href="https://modelcontextprotocol.io">MCP</a> servers. They are configured with <code>[[mcp]]</code> blocks, which merge across the user and project files like every other setting:</p>
-<pre><code class="language-toml">[[mcp]]
-name = "files"                  # its tools reach the model as files__&lt;tool&gt;
-command = "npx"
-args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
-# env = { NODE_ENV = "production" }
-# env_cmd = { TOKEN = "op read op://vault/item/token" }   # stdout is the value
-
-[[mcp]]
-name = "docs"
-transport = "http"
-url = "https://example.com/mcp"
-headers = { Accept = "application/json" }
-header_cmd = { Authorization = "printf 'Bearer %s' $(cat ~/.docs-token)" }
-tools = ["search"]              # or "all", the default
-trust = "prompt"                # "prompt" (default), "allow", "deny"
-rehydrate = false               # the default
-timeout_secs = 30               # starting the server, and every call
-enabled = true</code></pre>
-<p><code>env_cmd</code> and <code>header_cmd</code> take their values from a command's stdout, the way <code>api_key_cmd</code> does, so a token never sits in the file. <code>airlok config show</code> prints the command, never what it produced.</p>
-<p>Servers start on the first turn that can use them, not when airlok starts. One that fails to start prints a line and is skipped, and the run continues without it. Tools are named <code>&lt;server&gt;__&lt;tool&gt;</code>; a built-in keeps its name if a server ever claims one.</p>
-<p><code>trust</code> decides the gate. The default, <code>prompt</code>, shows the server, the tool, and the arguments, and asks with the same <code>[y]es / [n]o / [a]ll / [q]uit</code> prompt as a shell command, where <code>a</code> approves that one server for the rest of the run. <code>allow</code> never asks. <code>deny</code> keeps a server's tools from the model, while <code>airlok mcp list</code> still shows them.</p>
-<p><code>rehydrate</code> decides what the server receives. By default airlok sends placeholders: a secret found in your files leaves as <code>&lt;&lt;SECRET_1&gt;&gt;</code> rather than as the value, because an MCP server is a third party in the same way the model is, and the confirmation prompt shows you exactly what will be sent. Set <code>rehydrate = true</code> for a server that genuinely needs the value. The provider API key is refused either way, as it is for every tool.</p>
-<p>A server is untrusted input. Its tool descriptions and its results reach the model inside markers saying they are data from that server, so a description reading "ignore previous instructions" is quoted text and nothing more. Nothing a server sends changes the deny list, the confirmations, or anything else about how airlok behaves.</p>
+<p>airlok offers the model tools from external <a href="https://modelcontextprotocol.io">MCP</a> servers, configured the way Claude Code, Cursor, and VS Code configure them. A <code>.mcp.json</code> copied from another project works unchanged:</p>
+<pre><code class="language-json">{
+  "mcpServers": {
+    "files": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "."],
+      "env": { "NODE_ENV": "production" }
+    },
+    "docs": {
+      "type": "http",
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer ${DOCS_TOKEN}" }
+    }
+  }
+}</code></pre>
+<p>Three files are read, each winning over the one above it. A server named in more than one takes the highest definition whole, so a local file is a real override rather than a patch.</p>
+<div class="table">
+<table>
+<thead><tr><th>Scope</th><th>File</th><th>For</th></tr></thead>
+<tbody>
+<tr><td>user</td><td><code>~/.config/airlok/mcp.json</code></td><td>servers you want everywhere</td></tr>
+<tr><td>project</td><td><code>./.mcp.json</code></td><td>the project's servers, meant to be committed</td></tr>
+<tr><td>local</td><td><code>./.airlok/mcp.json</code></td><td>your own overrides, gitignored</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>${VAR}</code> and <code>${VAR:-default}</code> expand from the environment in <code>command</code>, <code>args</code>, <code>env</code>, <code>url</code>, and <code>headers</code>. A variable that is unset or empty with no default is an error naming it, rather than an empty string that fails later in a way nobody can read. For a secret, prefer <code>env_cmd</code> and <code>header_cmd</code>, which take the value from a command's stdout: nothing is written in the file, and nothing has to sit in your environment where every other process can read it.</p>
+<p>Managing them:</p>
 <div class="table">
 <table>
 <thead><tr><th>Command</th><th>What it does</th></tr></thead>
 <tbody>
-<tr><td><code>airlok mcp list</code></td><td>every configured server, whether it answers, and the tools it offers</td></tr>
-<tr><td><code>airlok mcp call &lt;server&gt; &lt;tool&gt; '&lt;json&gt;'</code></td><td>call one tool with the same gates, for debugging</td></tr>
-<tr><td><code>/mcp</code></td><td>in a session, the same list; <code>/mcp &lt;name&gt;</code> enables a disabled server for this session</td></tr>
+<tr><td><code>airlok mcp list</code></td><td>every server, its scope, whether it answers, and its tools</td></tr>
+<tr><td><code>airlok mcp add &lt;name&gt; --scope user -- npx -y server-filesystem .</code></td><td>write a stdio server; <code>--url</code> with <code>--transport http</code> for an http one</td></tr>
+<tr><td><code>airlok mcp get &lt;name&gt;</code></td><td>the resolved entry and which file it came from</td></tr>
+<tr><td><code>airlok mcp remove &lt;name&gt; [--scope ...]</code></td><td>take it out again</td></tr>
+<tr><td><code>airlok mcp import &lt;path&gt;</code></td><td>merge another tool's <code>mcpServers</code> file into a scope</td></tr>
+<tr><td><code>airlok mcp export [--scope ...]</code></td><td>print standard JSON, to hand to another tool</td></tr>
+<tr><td><code>airlok mcp call &lt;server&gt; &lt;tool&gt; '&lt;json&gt;'</code></td><td>call one tool through the same gates, for debugging</td></tr>
+<tr><td><code>airlok mcp trust list</code> and <code>trust revoke &lt;server&gt;</code></td><td>approvals remembered past a run</td></tr>
+<tr><td><code>/mcp</code></td><td>in a session, the same list; <code>/mcp &lt;name&gt;</code> enables a disabled server for that session</td></tr>
 </tbody>
 </table>
 </div>
+<h3 id="airlok-s-own-options">airlok's own options</h3>
+<p>Everything airlok adds lives under an <code>airlok</code> key, so a plain config stays plain:</p>
+<pre><code class="language-json">{
+  "mcpServers": {
+    "docs": {
+      "type": "http",
+      "url": "https://example.com/mcp",
+      "airlok": {
+        "trust": "prompt",
+        "rehydrate": false,
+        "tools": ["search"],
+        "header_cmd": { "Authorization": "printf 'Bearer %s' $(cat ~/.docs-token)" }
+      }
+    }
+  }
+}</code></pre>
+<p>The same options are available as <code>[[mcp]]</code> blocks in <code>config.toml</code> or <code>airlok.toml</code>, which keep working and win a name clash with any JSON file:</p>
+<pre><code class="language-toml">[[mcp]]
+name = "files"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
+trust = "prompt"       # "prompt" (default), "allow", "deny"
+rehydrate = false      # the default
+tools = "all"          # or a list: ["read_text_file"]
+timeout_secs = 30
+enabled = true</code></pre>
+<h3 id="what-a-server-may-and-may-not-do">What a server may and may not do</h3>
+<p>Servers start on the first turn that can use them, not when airlok starts. One that fails to start prints a line and is skipped, and the run continues without it. Tools reach the model as <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>; a built-in keeps its name if a server ever claims one.</p>
+<p><code>trust</code> decides the gate. The default, <code>prompt</code>, shows the server, the tool, what the server can reach, the place each argument names, and the arguments themselves, then asks with <code>[y]es / [n]o / [a]ll / [s]ave / [q]uit</code>. <code>a</code> covers that tool on that server for the rest of the run, for the places that call named and no others. <code>s</code> remembers the same approval past the run in <code>.airlok/mcp-trust.json</code>, which is gitignored and written 0600; it records what the server was, so changing its command or url makes it ask again. <code>allow</code> never asks, and <code>deny</code> keeps a server's tools from the model while <code>airlok mcp list</code> still shows them.</p>
+<p><code>rehydrate</code> decides what the server receives. By default airlok sends placeholders: a secret found in your files leaves as <code>&lt;&lt;SECRET_1&gt;&gt;</code> rather than as the value, and the confirmation shows you exactly what will be sent. Set <code>rehydrate = true</code> for a server that genuinely needs the value. The provider API key is refused either way.</p>
+<p>A server is untrusted input. Its tool descriptions and its results reach the model inside markers saying they are data from that server, so a description reading "ignore previous instructions" is quoted text and nothing more. Nothing a server sends changes the deny list, the confirmations, or anything else about how airlok behaves.</p>
 <p>Plan mode offers no MCP tools, just as it offers no write tools, and it starts no servers.</p>
 </section>
 <section id="airlok-md">
