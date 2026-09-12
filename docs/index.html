@@ -12,13 +12,14 @@
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.5.0">v0.5.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.5.0/README.md">README</a> at that tag.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.6.0">v0.6.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.6.0/README.md">README</a> at that tag.</p>
 <ul class="toc">
 <li><a href="#install">Install</a></li>
 <li><a href="#usage">Usage</a></li>
 <li><a href="#repl">Interactive sessions</a></li>
 <li><a href="#sessions">Sessions</a></li>
 <li><a href="#tools">Tools</a></li>
+<li><a href="#mcp">MCP servers</a></li>
 <li><a href="#airlok-md">Context and AIRLOK.md</a></li>
 <li><a href="#configuration">Configuration</a></li>
 <li><a href="#redaction">Redaction: what comes back, and what never does</a></li>
@@ -52,7 +53,8 @@ airlok --show-redactions "..."                 # list what was redacted (kind an
 airlok config init                             # write a commented config to the user path
 airlok config show                             # print the effective config and the key source
 airlok context                                 # print the context block sent with the system prompt, after redaction
-airlok redactions                              # list what the redactor detects and how each kind is treated</code></pre>
+airlok redactions                              # list what the redactor detects and how each kind is treated
+airlok mcp list                                # the configured MCP servers, whether they answer, and their tools</code></pre>
 <p>Every <code>write_file</code> and <code>edit_file</code> call shows a diff with line numbers, three lines of context, +/- gutters, and syntax highlighting, and asks <code>Apply? [y]es / [n]o / [a]ll / [q]uit</code>. A diff longer than 40 lines stops at <code>... N more lines, [v] to view all</code>; <code>v</code> prints the rest and asks again. Every <code>bash</code> call that is not on the allow list shows the command and asks the same way. <code>y</code> applies this one, <code>n</code> sends a rejection back to the model so it can adapt, <code>a</code> approves the rest of that kind for the run, and <code>q</code> aborts the run with a non-zero exit. Prompts are read from the terminal, not stdin, so piped input still works; without a terminal, pass <code>--yes</code> or turn the confirmations off in the config.</p>
 <p>Model output is rendered as markdown (headings, emphasis, lists, tables, highlighted code) when stdout is a terminal; set <code>NO_COLOR</code> or redirect stdout for plain text. Runs of read-only tool calls show on the status line and end with one <code>read N files</code> line; <code>-v</code> shows every call.</p>
 </section>
@@ -93,6 +95,7 @@ airlok redactions                              # list what the redactor detects 
 <tbody>
 <tr><td><code>/help</code></td><td>list the commands</td></tr>
 <tr><td><code>/model [&lt;id&gt;]</code></td><td>show the model, or use <code>&lt;id&gt;</code> for the rest of the session; not validated, the provider rejects a bad id on the next turn</td></tr>
+<tr><td><code>/mcp</code></td><td>list the MCP servers and their tools; <code>/mcp &lt;name&gt;</code> enables a disabled one for this session</td></tr>
 <tr><td><code>/plan</code></td><td>turn plan mode on or off</td></tr>
 <tr><td><code>/go</code></td><td>carry out the plan from plan mode, back in normal mode</td></tr>
 <tr><td><code>/provider [&lt;name&gt;]</code></td><td>show the provider, or switch to <code>anthropic</code> or <code>openai</code> if a key is available for it; says which key is missing otherwise</td></tr>
@@ -133,6 +136,44 @@ airlok redactions                              # list what the redactor detects 
 </table>
 </div>
 <p>Tool results over 50 KiB are cut with a marker telling the model to page with <code>read_file</code>'s <code>offset</code> and <code>limit</code>.</p>
+</section>
+<section id="mcp">
+<h2>MCP servers</h2>
+<p>airlok can offer the model tools from external <a href="https://modelcontextprotocol.io">MCP</a> servers. They are configured with <code>[[mcp]]</code> blocks, which merge across the user and project files like every other setting:</p>
+<pre><code class="language-toml">[[mcp]]
+name = "files"                  # its tools reach the model as files__&lt;tool&gt;
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "."]
+# env = { NODE_ENV = "production" }
+# env_cmd = { TOKEN = "op read op://vault/item/token" }   # stdout is the value
+
+[[mcp]]
+name = "docs"
+transport = "http"
+url = "https://example.com/mcp"
+headers = { Accept = "application/json" }
+header_cmd = { Authorization = "printf 'Bearer %s' $(cat ~/.docs-token)" }
+tools = ["search"]              # or "all", the default
+trust = "prompt"                # "prompt" (default), "allow", "deny"
+rehydrate = false               # the default
+timeout_secs = 30               # starting the server, and every call
+enabled = true</code></pre>
+<p><code>env_cmd</code> and <code>header_cmd</code> take their values from a command's stdout, the way <code>api_key_cmd</code> does, so a token never sits in the file. <code>airlok config show</code> prints the command, never what it produced.</p>
+<p>Servers start on the first turn that can use them, not when airlok starts. One that fails to start prints a line and is skipped, and the run continues without it. Tools are named <code>&lt;server&gt;__&lt;tool&gt;</code>; a built-in keeps its name if a server ever claims one.</p>
+<p><code>trust</code> decides the gate. The default, <code>prompt</code>, shows the server, the tool, and the arguments, and asks with the same <code>[y]es / [n]o / [a]ll / [q]uit</code> prompt as a shell command, where <code>a</code> approves that one server for the rest of the run. <code>allow</code> never asks. <code>deny</code> keeps a server's tools from the model, while <code>airlok mcp list</code> still shows them.</p>
+<p><code>rehydrate</code> decides what the server receives. By default airlok sends placeholders: a secret found in your files leaves as <code>&lt;&lt;SECRET_1&gt;&gt;</code> rather than as the value, because an MCP server is a third party in the same way the model is, and the confirmation prompt shows you exactly what will be sent. Set <code>rehydrate = true</code> for a server that genuinely needs the value. The provider API key is refused either way, as it is for every tool.</p>
+<p>A server is untrusted input. Its tool descriptions and its results reach the model inside markers saying they are data from that server, so a description reading "ignore previous instructions" is quoted text and nothing more. Nothing a server sends changes the deny list, the confirmations, or anything else about how airlok behaves.</p>
+<div class="table">
+<table>
+<thead><tr><th>Command</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>airlok mcp list</code></td><td>every configured server, whether it answers, and the tools it offers</td></tr>
+<tr><td><code>airlok mcp call &lt;server&gt; &lt;tool&gt; '&lt;json&gt;'</code></td><td>call one tool with the same gates, for debugging</td></tr>
+<tr><td><code>/mcp</code></td><td>in a session, the same list; <code>/mcp &lt;name&gt;</code> enables a disabled server for this session</td></tr>
+</tbody>
+</table>
+</div>
+<p>Plan mode offers no MCP tools, just as it offers no write tools, and it starts no servers.</p>
 </section>
 <section id="airlok-md">
 <h2>Context and AIRLOK.md</h2>
