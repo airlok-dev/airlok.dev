@@ -12,7 +12,7 @@
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.9.1">v0.9.1</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.9.1/README.md">README</a> at that tag.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.9.2">v0.9.2</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.9.2/README.md">README</a> at that tag.</p>
 <ul class="toc">
 <li><a href="#install">Install</a></li>
 <li><a href="#usage">Usage</a></li>
@@ -71,6 +71,8 @@ airlok mcp list                                # the configured MCP servers, whe
 <tr><td>Tab</td><td>take the first <code>/</code> command, <code>@</code> path, or command argument on offer; Tab again cycles through the rest</td></tr>
 <tr><td>Right arrow</td><td>take the rest of the <code>/</code> command shown after the cursor</td></tr>
 <tr><td>Esc or Ctrl-C</td><td>during a turn, cancel it</td></tr>
+<tr><td>Ctrl+V</td><td>attach an image from the clipboard. A chip like <code>[image 1: 1024x768 png, 210 KB]</code> goes in at the cursor, so the sentence can refer to it; several fit in one message. Alt+V does the same, for terminals that keep Ctrl+V for themselves. Every failure says why on its own line</td></tr>
+<tr><td>a path to an image</td><td>typed, Tab-completed or dropped into the terminal, a path ending <code>.png</code>, <code>.jpg</code>, <code>.jpeg</code>, <code>.gif</code> or <code>.webp</code> is offered as an attachment. Approved, it becomes a chip, so the model gets the picture rather than the path; refused, it stays as typed</td></tr>
 <tr><td>Ctrl-C</td><td>at the prompt, clear the line; on an empty line it does nothing</td></tr>
 <tr><td>Ctrl-D</td><td>save and quit</td></tr>
 <tr><td>Ctrl-R</td><td>search this run's history; Up and Down step through it</td></tr>
@@ -266,6 +268,7 @@ keep_recent_turns = 4    # turns kept verbatim after the summary
 [safety]
 confirm_writes = true    # show a diff and ask before write_file / edit_file
 confirm_bash = true      # ask before running a command that is not allow-listed
+confirm_images = true    # ask before sending an image, which cannot be scanned for secrets
 bash_allowlist = ["git status", "git diff", "ls", "cat", "pwd", "find", "grep", "rg", "cargo check", "cargo test", "cargo build"]
 bash_denylist = ["rm -rf", "git push --force", "sudo"]
 
@@ -277,7 +280,8 @@ show_secrets_in_output = false   # show secrets from files in full in the termin
 
 [models."gpt-6-astra"]    # settings for one model id (the deployment name on Azure); none by default
 reasoning_effort = "none" # openai only, sent as reasoning_effort; not validated
-api = "responses"         # openai only, overrides [provider] api for this model</code></pre>
+api = "responses"         # openai only, overrides [provider] api for this model
+vision = false            # the model takes no images, so airlok refuses at attach time</code></pre>
 <p>For openai, <code>base_url</code> falls back to the <code>OPENAI_BASE_URL</code> environment variable when the config does not set it.</p>
 <h3 id="azure-openai">Azure OpenAI</h3>
 <pre><code class="language-toml">[provider]
