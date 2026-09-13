@@ -12,7 +12,7 @@
 <main>
 <nav><a href="/">airlok</a> <a href="https://github.com/airlok-dev/airlok">GitHub</a></nav>
 <h1>Documentation</h1>
-<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.9.0">v0.9.0</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.9.0/README.md">README</a> at that tag.</p>
+<p class="note">Docs for airlok <a href="https://github.com/airlok-dev/airlok/releases/tag/v0.9.1">v0.9.1</a>, generated from the <a href="https://github.com/airlok-dev/airlok/blob/v0.9.1/README.md">README</a> at that tag.</p>
 <ul class="toc">
 <li><a href="#install">Install</a></li>
 <li><a href="#usage">Usage</a></li>
@@ -114,7 +114,7 @@ airlok mcp list                                # the configured MCP servers, whe
 <tr><td><code>/init</code></td><td>propose an AIRLOK.md for this repository, as a diff to approve</td></tr>
 <tr><td><code>/copy [&lt;n&gt;\|code]</code></td><td>copy the last reply to the clipboard; a number takes the Nth from the end, <code>code</code> the last fenced block</td></tr>
 <tr><td><code>/diff [&lt;path&gt;]</code></td><td>what airlok changed on disk this session, diffed from before its first write</td></tr>
-<tr><td><code>/doctor</code></td><td>check the config, key, provider, MCP servers, git, terminal and storage; <code>airlok doctor</code> does the same and exits non-zero on failure</td></tr>
+<tr><td><code>/doctor</code></td><td>check the config, key, provider, MCP servers, git, terminal and storage; <code>airlok doctor</code> does the same and exits non-zero on failure. <code>--offline</code> skips the provider request, the one check that leaves the machine</td></tr>
 <tr><td><code>/goal [&lt;statement&gt;\|clear]</code></td><td>what the session is working toward, kept in the system prompt every turn and shown in the footer</td></tr>
 <tr><td><code>/clear</code></td><td>start a new session; the current one stays saved</td></tr>
 <tr><td><code>/exit</code></td><td>save and quit; <code>/quit</code> works too</td></tr>
@@ -253,6 +253,7 @@ model = "claude-sonnet-4-6"   # per provider: anthropic "claude-sonnet-4-6", ope
 # base_url = "https://api.openai.com/v1"   # openai only; Azure: "https://&lt;resource&gt;.openai.azure.com/openai/v1"
 # api_key_env = "ANTHROPIC_API_KEY"        # env var holding the key
 # api_key_cmd = "..."                      # shell command whose stdout is the key
+# api = "chat"                             # openai only: "chat" (the default) or "responses"
 context_window = 200000       # input tokens the model accepts; used to decide when to compact
 
 [agent]
@@ -275,7 +276,8 @@ max_bytes = 32768        # cap on the context block; tree is cut first, then ins
 show_secrets_in_output = false   # show secrets from files in full in the terminal instead of masked
 
 [models."gpt-6-astra"]    # settings for one model id (the deployment name on Azure); none by default
-reasoning_effort = "none" # openai only, sent as reasoning_effort; not validated</code></pre>
+reasoning_effort = "none" # openai only, sent as reasoning_effort; not validated
+api = "responses"         # openai only, overrides [provider] api for this model</code></pre>
 <p>For openai, <code>base_url</code> falls back to the <code>OPENAI_BASE_URL</code> environment variable when the config does not set it.</p>
 <h3 id="azure-openai">Azure OpenAI</h3>
 <pre><code class="language-toml">[provider]
@@ -283,7 +285,7 @@ name = "openai"
 model = "&lt;deployment-name&gt;"
 base_url = "https://&lt;resource&gt;.openai.azure.com/openai/v1"
 api_key_cmd = "az cognitiveservices account keys list -n &lt;resource&gt; -g &lt;resource-group&gt; --query key1 -o tsv"</code></pre>
-<p>Azure's <code>gpt-6-astra</code> accepts tools on Chat Completions only with reasoning off, so it needs <code>[models."gpt-6-astra"]</code> with <code>reasoning_effort = "none"</code>. Without it, airlok shows the provider's error and names that setting. The entry applies however the model is chosen, <code>/model gpt-6-astra</code> included.</p>
+<p>Azure's <code>gpt-6-astra</code> accepts tools on Chat Completions only with reasoning off, so on that API it needs <code>[models."gpt-6-astra"]</code> with <code>reasoning_effort = "none"</code>. Giving the model <code>api = "responses"</code> instead keeps both the tools and the reasoning effort, which is what makes <code>/effort</code> worth using there. With neither, airlok shows the provider's error and names the setting behind it. The entry applies however the model is chosen, <code>/model gpt-6-astra</code> included.</p>
 <p>With this in the user config, plain <code>airlok "..."</code> works. The key is sent in Azure's <code>api-key</code> header, chosen from the host. No shell wrapper or exported variable is needed.</p>
 </section>
 <section id="redaction">
